@@ -1,0 +1,38 @@
+node_modules/
+**/node_modules/
+
+.env
+.env.*
+!.env.example
+
+dist/
+build/
+coverage/
+.next/
+.vite/
+
+*.log
+npm-debug.log*
+.DS_Store
+
+
+# Generated AI/Prisma skills
+apps/backend/.agents/
+
+# Generated AI tool files
+apps/backend/.agents/
+apps/backend/.claude/
+apps/backend/.windsurf/
+
+# Generated AI tool directories
+apps/backend/.cursor/
+apps/backend/.devin/
+
+# Database backups
+*.dump
+*.backup
+*.backup.*
+pg_hba.conf*
+
+# Sensitive admin utilities - review before publishing
+apps/backend/scripts/reset-admin-password.js

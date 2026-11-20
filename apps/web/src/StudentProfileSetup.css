@@ -1,0 +1,143 @@
+.profile-setup-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 40px 20px;
+    background: #f5f5f0;
+    color: #292f29;
+}
+
+.profile-setup-card {
+    width: min(100%, 560px);
+    padding: 42px;
+    border: 1px solid #e5e6de;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 18px 55px rgba(35, 45, 35, 0.07);
+}
+
+.profile-setup-brand {
+    display: inline-block;
+    margin-bottom: 38px;
+    color: #29342c;
+    font-size: 25px;
+    font-weight: 800;
+    text-decoration: none;
+    letter-spacing: -1.5px;
+}
+
+.profile-setup-brand span {
+    color: #8b9b78;
+}
+
+.profile-setup-kicker {
+    margin-bottom: 12px;
+    color: #829174;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.7px;
+}
+
+.profile-setup-card h1 {
+    margin: 0;
+    font-size: clamp(28px, 5vw, 38px);
+    line-height: 1.15;
+    letter-spacing: -1.5px;
+}
+
+.profile-setup-description {
+    margin: 14px 0 30px;
+    color: #777d73;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.profile-setup-form {
+    display: grid;
+    gap: 19px;
+}
+
+.profile-field {
+    display: grid;
+    gap: 8px;
+}
+
+.profile-field label {
+    color: #444b42;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.profile-field label span {
+    color: #92978e;
+    font-weight: 400;
+}
+
+.profile-field input,
+.profile-field select {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 13px;
+    border: 1px solid #e1e4dc;
+    border-radius: 9px;
+    outline: none;
+    background: #fff;
+    color: #30372f;
+    font: inherit;
+    font-size: 14px;
+}
+
+.profile-field input:focus,
+.profile-field select:focus {
+    border-color: #8b9b78;
+    box-shadow: 0 0 0 3px rgba(139, 155, 120, 0.13);
+}
+
+.profile-field select:disabled {
+    cursor: not-allowed;
+    background: #f2f3ef;
+}
+
+.profile-form-error {
+    margin: 0;
+    color: #bd3939;
+    font-size: 13px;
+}
+
+.profile-save-button {
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    border: 0;
+    border-radius: 9px;
+    background: #344a3a;
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.profile-save-button:hover {
+    background: #263a2d;
+}
+
+.profile-save-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+.profile-setup-footer {
+    margin: 22px 0 0;
+    color: #969b92;
+    font-size: 11px;
+    text-align: center;
+}
+
+@media (max-width: 560px) {
+    .profile-setup-card {
+        padding: 28px 22px;
+    }
+}

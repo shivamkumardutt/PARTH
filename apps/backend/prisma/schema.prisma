@@ -1,0 +1,369 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  DELETED
+}
+
+enum ContentStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+  ARCHIVED
+}
+
+enum ParentRelation {
+  FATHER
+  MOTHER
+  GUARDIAN
+  OTHER
+}
+
+enum CourseType {
+  FREE
+  PREMIUM
+  PAID
+}
+
+enum LessonType {
+  VIDEO
+  ARTICLE
+  PDF
+  INTERACTIVE
+  LIVE
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String?    @unique
+  phone        String?    @unique
+  passwordHash String?
+  status       UserStatus @default(ACTIVE)
+
+  roles          UserRole[]
+  studentProfile StudentProfile?
+  creatorProfile CreatorProfile?
+
+  parentLinks ParentStudent[] @relation("ParentLinks")
+  childLinks  ParentStudent[] @relation("ChildLinks")
+
+  createdCourses           Course[]            @relation("CourseCreator")
+  reviewedCourseReviews    CourseReview[]      @relation("CourseReviewReviewer")
+  coursePublicationActions CoursePublication[] @relation("CoursePublicationAdmin")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+
+  users UserRole[]
+
+  createdAt DateTime @default(now())
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([roleId])
+}
+
+enum StudentPathwayType {
+  SCHOOL
+  HIGHER_EDUCATION
+  COMPETITIVE_EXAM
+  GOVERNMENT_EXAM
+  PRIVATE_SECTOR
+  CAREER_SKILLS
+  VOCATIONAL
+}
+
+model StudentProfile {
+  id               String  @id @default(cuid())
+  userId           String  @unique
+  gradeId          String?
+  boardId          String?
+  educationLevelId String?
+
+  dateOfBirth       DateTime?
+  preferredLanguage String?   @default("en")
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grade          Grade?          @relation(fields: [gradeId], references: [id])
+  board          Board?          @relation(fields: [boardId], references: [id])
+  educationLevel EducationLevel? @relation(fields: [educationLevelId], references: [id])
+
+  pathways StudentPathway[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gradeId, boardId])
+  @@index([educationLevelId])
+}
+
+model ParentStudent {
+  id        String         @id @default(cuid())
+  parentId  String
+  studentId String
+  relation  ParentRelation @default(GUARDIAN)
+  verified  Boolean        @default(false)
+
+  parent  User @relation("ParentLinks", fields: [parentId], references: [id], onDelete: Cascade)
+  student User @relation("ChildLinks", fields: [studentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([parentId, studentId])
+  @@index([studentId])
+}
+
+model CreatorProfile {
+  id                 String  @id @default(cuid())
+  userId             String  @unique
+  displayName        String
+  bio                String?
+  verificationStatus String  @default("PENDING")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Board {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique
+  countryCode String  @default("IN")
+  description String?
+  isActive    Boolean @default(true)
+
+  sessions AcademicSession[]
+  grades   Grade[]
+  students StudentProfile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AcademicSession {
+  id        String    @id @default(cuid())
+  boardId   String
+  name      String
+  startDate DateTime?
+  endDate   DateTime?
+  isActive  Boolean   @default(false)
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([boardId, name])
+}
+
+model Grade {
+  id      String @id @default(cuid())
+  boardId String
+  name    String
+  level   Int
+
+  board    Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  subjects Subject[]
+  students StudentProfile[]
+
+  @@unique([boardId, level])
+}
+
+model Subject {
+  id      String  @id @default(cuid())
+  gradeId String
+  name    String
+  code    String?
+
+  grade    Grade     @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  chapters Chapter[]
+
+  @@unique([gradeId, name])
+}
+
+model Chapter {
+  id        String @id @default(cuid())
+  subjectId String
+  title     String
+  sequence  Int
+
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topics  Topic[]
+
+  @@unique([subjectId, sequence])
+}
+
+model Topic {
+  id          String  @id @default(cuid())
+  chapterId   String
+  title       String
+  sequence    Int
+  description String?
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([chapterId, sequence])
+}
+
+model Course {
+  id        String  @id @default(cuid())
+  creatorId String
+  boardId   String?
+  gradeId   String?
+  subjectId String?
+
+  title       String
+  slug        String        @unique
+  description String?
+  type        CourseType    @default(FREE)
+  status      ContentStatus @default(DRAFT)
+  isPublished Boolean       @default(false)
+  publishedAt DateTime?
+
+  creator User @relation("CourseCreator", fields: [creatorId], references: [id])
+
+  lessons            Lesson[]
+  reviews            CourseReview[]
+  publicationHistory CoursePublication[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([creatorId])
+  @@index([boardId, gradeId, subjectId])
+  @@index([status, type])
+}
+
+model Lesson {
+  id          String        @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  type        LessonType    @default(VIDEO)
+  status      ContentStatus @default(DRAFT)
+  sequence    Int
+
+  videoUrl    String?
+  durationSec Int?
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  resources Resource[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([courseId, sequence])
+}
+
+model Resource {
+  id           String @id @default(cuid())
+  lessonId     String
+  title        String
+  resourceType String
+  fileUrl      String
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model CourseReview {
+  id         String  @id @default(cuid())
+  courseId   String
+  reviewerId String
+  decision   String
+  reason     String?
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  reviewer User   @relation("CourseReviewReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([courseId, createdAt])
+  @@index([reviewerId])
+}
+
+model CoursePublication {
+  id       String @id @default(cuid())
+  courseId String
+  adminId  String
+  action   String
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  admin User @relation("CoursePublicationAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([courseId, createdAt])
+  @@index([adminId])
+}
+
+model EducationLevel {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  category    String
+  description String?
+  sortOrder   Int
+  countryCode String  @default("IN")
+  isActive    Boolean @default(true)
+
+  studentProfiles StudentProfile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, sortOrder])
+  @@index([countryCode, isActive])
+}
+
+model StudentPathway {
+  id               String             @id @default(cuid())
+  studentProfileId String
+  type             StudentPathwayType
+  title            String
+  status           String             @default("ACTIVE")
+  countryCode      String             @default("IN")
+  stateCode        String?
+  details          Json?
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentProfileId, type])
+  @@index([countryCode, stateCode])
+  @@index([status])
+}
