@@ -4,7 +4,8 @@
   reviewCourse,
   publishCourse as publishCourseService,
   unpublishCourse as unpublishCourseService,
-  getCoursePublicationHistory as getCoursePublicationHistoryService
+  getCoursePublicationHistory as getCoursePublicationHistoryService,
+  reviewLesson as reviewLessonService
 } from './admin-courses.service.js';
 
 function handleError(res, error, label) {
@@ -172,5 +173,26 @@ export async function getCoursePublicationHistory(req, res) {
       error,
       'Get course publication history error'
     );
+  }
+}
+
+export async function approveLesson(req, res) {
+  try {
+    const result = await reviewLessonService(req.params.lessonId, req.user.id, 'APPROVED');
+    return res.status(200).json({ success: true, message: 'Lesson approved successfully', data: result });
+  } catch (error) {
+    return handleError(res, error, 'Approve lesson error');
+  }
+}
+
+export async function rejectLesson(req, res) {
+  try {
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason) return res.status(400).json({ success: false, message: 'Rejection reason is required' });
+    if (reason.length > 2000) return res.status(400).json({ success: false, message: 'Rejection reason cannot exceed 2000 characters' });
+    const result = await reviewLessonService(req.params.lessonId, req.user.id, 'REJECTED', reason);
+    return res.status(200).json({ success: true, message: 'Lesson rejected successfully. Course returned to creator for changes.', data: result });
+  } catch (error) {
+    return handleError(res, error, 'Reject lesson error');
   }
 }
