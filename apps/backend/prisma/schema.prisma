@@ -44,6 +44,12 @@ enum LessonType {
   LIVE
 }
 
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 model User {
   id           String     @id @default(cuid())
   name         String
@@ -61,7 +67,9 @@ model User {
 
   createdCourses           Course[]            @relation("CourseCreator")
   reviewedCourseReviews    CourseReview[]      @relation("CourseReviewReviewer")
+  reviewedLessonReviews    LessonReview[]      @relation("LessonReviewReviewer")
   coursePublicationActions CoursePublication[] @relation("CoursePublicationAdmin")
+  courseEnrollments        CourseEnrollment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -254,6 +262,7 @@ model Course {
   lessons            Lesson[]
   reviews            CourseReview[]
   publicationHistory CoursePublication[]
+  enrollments        CourseEnrollment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -278,6 +287,8 @@ model Lesson {
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   resources Resource[]
+  progress  LessonProgress[]
+  reviews   LessonReview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -295,6 +306,22 @@ model Resource {
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+model LessonReview {
+  id         String   @id @default(cuid())
+  lessonId   String
+  reviewerId String
+  decision   String
+  reason     String?
+
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  reviewer User   @relation("LessonReviewReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([lessonId, createdAt])
+  @@index([reviewerId])
 }
 
 model CourseReview {
@@ -366,4 +393,35 @@ model StudentPathway {
   @@index([studentProfileId, type])
   @@index([countryCode, stateCode])
   @@index([status])
+}
+
+model CourseEnrollment {
+  id          String           @id @default(cuid())
+  studentId   String
+  courseId    String
+  status      EnrollmentStatus @default(ACTIVE)
+  enrolledAt  DateTime         @default(now())
+  completedAt DateTime?
+
+  student  User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course   Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress LessonProgress[]
+
+  @@unique([studentId, courseId])
+  @@index([studentId, status, enrolledAt])
+  @@index([courseId])
+}
+
+model LessonProgress {
+  id           String    @id @default(cuid())
+  enrollmentId String
+  lessonId     String
+  completedAt  DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  enrollment CourseEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson     Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId])
+  @@index([lessonId])
 }

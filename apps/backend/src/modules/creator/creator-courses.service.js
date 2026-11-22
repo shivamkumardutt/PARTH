@@ -1,3 +1,4 @@
+import { getCourseSubmissionIssues } from '../courses/course-readiness.js';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../../config/database.js';
 
@@ -362,6 +363,7 @@ export async function submitCreatorCourse(userId, courseId) {
           select: {
             id: true,
             title: true,
+            description: true,
             type: true,
             videoUrl: true,
             resources: {
@@ -386,56 +388,28 @@ export async function submitCreatorCourse(userId, courseId) {
       );
     }
 
-    if (course.lessons.length === 0) {
+    const readinessIssues = getCourseSubmissionIssues(course);
+    if (readinessIssues.length > 0) {
       throw createError(
-        'Add at least one lesson before submitting the course',
-        400
-      );
-    }
-    
-    if (process.env.NODE_ENV !== 'development') {
-    const missingVideoLessons = course.lessons
-      .filter(lesson => lesson.type === 'VIDEO')
-      .filter(lesson => {
-        if (!lesson.videoUrl) return true;
-
-        try {
-          const url = new URL(lesson.videoUrl);
-          return !['http:', 'https:'].includes(url.protocol);
-        } catch {
-          return true;
-        }
-      });
-
-    if (missingVideoLessons.length > 0) {
-      throw createError(
-        `Add valid video URLs to these lessons: ${
-          missingVideoLessons.map(lesson => lesson.title).join(', ')
-        }`,
+        `Course is not ready for review: ${readinessIssues.join(' ')}`,
         400
       );
     }
 
-    const resources = course.lessons.flatMap(
-      lesson => lesson.resources
-    );
-
-    const hasValidResource = resources.some(resource => {
-      try {
-        const url = new URL(resource.fileUrl);
-        return ['http:', 'https:'].includes(url.protocol);
-      } catch {
-        return false;
-      }
+    const lessonUpdate = await tx.lesson.updateMany({
+      where: {
+        courseId: course.id,
+        status: { in: ['DRAFT', 'REJECTED'] }
+      },
+      data: { status: 'PENDING_REVIEW' }
     });
 
-    if (!hasValidResource) {
+    if (lessonUpdate.count !== course.lessons.length) {
       throw createError(
-        'Add at least one valid study material resource before submitting',
-        400
+        'One or more lessons are not in a submittable state. Refresh and try again.',
+        409
       );
     }
-}
 
     const updated = await tx.course.updateMany({
       where: {

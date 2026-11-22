@@ -1,3 +1,4 @@
+import { getCoursePublicationIssues } from '../courses/course-readiness.js';
 import { prisma } from '../../config/database.js';
 
 function createError(message, statusCode) {
@@ -111,7 +112,11 @@ export async function getCourseForReview(courseId) {
           sequence: true,
           videoUrl: true,
           durationSec: true,
-          resources: true
+          resources: true,
+          reviews: {
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, decision: true, reason: true, createdAt: true, reviewer: { select: { id: true, name: true } } }
+          }
         }
       },
       reviews: {
@@ -157,7 +162,14 @@ export async function reviewCourse(courseId, adminId, decision, reason = null) {
       select: {
         id: true,
         title: true,
-        status: true
+        status: true,
+        lessons: {
+          orderBy: { sequence: 'asc' },
+          select: {
+            id: true, title: true, description: true, type: true,
+            status: true, videoUrl: true, resources: { select: { fileUrl: true } }
+          }
+        }
       }
     });
 
@@ -170,6 +182,23 @@ export async function reviewCourse(courseId, adminId, decision, reason = null) {
         'Only courses pending review can be approved or rejected',
         409
       );
+    }
+
+    if (decision === 'APPROVED') {
+      const unapproved = course.lessons.filter(lesson => lesson.status !== 'APPROVED');
+      if (unapproved.length > 0) {
+        throw createError(
+          `Approve all lessons before approving this course. ${unapproved.length} lesson(s) remain unapproved.`,
+          409
+        );
+      }
+      const readinessIssues = getCoursePublicationIssues({
+        ...course,
+        status: 'APPROVED'
+      });
+      if (readinessIssues.length > 0) {
+        throw createError(`Course is not ready for approval: ${readinessIssues.join(' ')}`, 400);
+      }
     }
 
     const updated = await tx.course.updateMany({
@@ -187,6 +216,13 @@ export async function reviewCourse(courseId, adminId, decision, reason = null) {
         'Course review was already processed. Refresh and try again.',
         409
       );
+    }
+
+    if (decision === 'REJECTED') {
+      await tx.lesson.updateMany({
+        where: { courseId },
+        data: { status: 'REJECTED' }
+      });
     }
 
     const review = await tx.courseReview.create({
@@ -225,7 +261,14 @@ export async function publishCourse(courseId, adminId) {
         id: true,
         title: true,
         status: true,
-        isPublished: true
+        isPublished: true,
+        lessons: {
+          orderBy: { sequence: 'asc' },
+          select: {
+            id: true, title: true, description: true, type: true,
+            status: true, videoUrl: true, resources: { select: { fileUrl: true } }
+          }
+        }
       }
     });
 
@@ -236,6 +279,14 @@ export async function publishCourse(courseId, adminId) {
     if (course.status !== 'APPROVED') {
       throw createError(
         'Only approved courses can be published',
+        409
+      );
+    }
+
+    const readinessIssues = getCoursePublicationIssues(course);
+    if (readinessIssues.length > 0) {
+      throw createError(
+        `Course cannot be published: ${readinessIssues.join(' ')}`,
         409
       );
     }
@@ -379,4 +430,75 @@ export async function getCoursePublicationHistory(courseId) {
   }
 
   return course;
+}
+
+export async function reviewLesson(lessonId, adminId, decision, reason = null) {
+  if (!['APPROVED', 'REJECTED'].includes(decision)) {
+    throw createError('Decision must be APPROVED or REJECTED', 400);
+  }
+  if (decision === 'REJECTED' && !reason?.trim()) {
+    throw createError('A rejection reason is required', 400);
+  }
+
+  return prisma.$transaction(async tx => {
+    const lesson = await tx.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        course: { select: { id: true, title: true, status: true, isPublished: true } },
+        resources: { select: { fileUrl: true } }
+      }
+    });
+    if (!lesson) throw createError('Lesson not found', 404);
+    if (lesson.course.status !== 'PENDING_REVIEW' || lesson.course.isPublished) {
+      throw createError('Only lessons in an unpublished course pending review can be reviewed', 409);
+    }
+    if (lesson.status !== 'PENDING_REVIEW') {
+      throw createError('Only lessons pending review can be approved or rejected', 409);
+    }
+
+    if (decision === 'APPROVED') {
+      const issues = getCoursePublicationIssues({
+        status: 'APPROVED',
+        lessons: [{ ...lesson, status: 'APPROVED' }]
+      }).filter(issue => !issue.startsWith('Only approved courses'));
+      if (issues.length > 0) {
+        throw createError(`Lesson is not ready for approval: ${issues.join(' ')}`, 400);
+      }
+    }
+
+    const updated = await tx.lesson.updateMany({
+      where: { id: lessonId, status: 'PENDING_REVIEW' },
+      data: { status: decision }
+    });
+    if (updated.count !== 1) throw createError('Lesson review state changed. Refresh and try again.', 409);
+
+    await tx.lessonReview.create({
+      data: {
+        lessonId,
+        reviewerId: adminId,
+        decision,
+        reason: decision === 'REJECTED' ? reason.trim() : null
+      }
+    });
+
+    if (decision === 'REJECTED') {
+      await tx.lesson.updateMany({
+        where: { courseId: lesson.course.id },
+        data: { status: 'REJECTED' }
+      });
+      await tx.course.update({
+        where: { id: lesson.course.id },
+        data: { status: 'REJECTED' }
+      });
+    }
+
+    return {
+      lesson: { id: lesson.id, title: lesson.title, status: decision },
+      course: {
+        id: lesson.course.id,
+        title: lesson.course.title,
+        status: decision === 'REJECTED' ? 'REJECTED' : lesson.course.status
+      }
+    };
+  });
 }
